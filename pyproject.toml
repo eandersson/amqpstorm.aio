@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amqpstorm-aio"
+description = "Asyncio AMQP 0-9-1 client for Python 3.14+."
+readme = "README.rst"
+license = "MIT"
+authors = [
+    {name = "Erik Olof Gunnar Andersson", email = "amqpstorm@eandersson.net"},
+]
+requires-python = ">=3.14"
+dependencies = []
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Communications",
+    "Topic :: Internet",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+]
+
+[project.optional-dependencies]
+# amqpstorm supplies the RabbitMQ management API client the end-to-end tier uses to
+# verify broker-side state; it is never imported by the library itself.
+dev = ["coverage>=7", "ruff", "mypy", "amqpstorm[management]>=3.1"]
+
+[project.urls]
+Repository = "https://github.com/eandersson/amqpstorm-aio"
+Changelog = "https://github.com/eandersson/amqpstorm-aio/blob/main/CHANGELOG.rst"
+
+[tool.setuptools.dynamic]
+version = {attr = "amqpstorm_aio.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["amqpstorm_aio*"]
+exclude = ["amqpstorm_aio.tests*"]
+
+[tool.setuptools.package-data]
+amqpstorm_aio = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = ["amqpstorm_aio/spec.py"]
+
+[tool.ruff.lint]
+extend-select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["amqpstorm_aio"]
+force-single-line = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+strict = true
+files = ["amqpstorm_aio"]
+exclude = "tests/"
+
+[tool.coverage.run]
+branch = true
+source = ["amqpstorm_aio"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

@@ -1,0 +1,17 @@
+*.pyc
+*.pyo
+*.bkp
+*.log
+*.class
+.idea
+__pycache__
+.venv*
+.coverage
+.coverage.*
+.mypy_cache
+.pytest_cache
+.ruff_cache
+build/
+dist/
+*.egg-info/
+amqpstorm_aio/tests/scenario/resources/

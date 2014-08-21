@@ -1,0 +1,5 @@
+* text=auto
+
+# Scripts that run inside the Linux broker container must keep LF endings; a CRLF
+# checkout on Windows breaks their shebang ("no such file or directory").
+docker/files/* text eol=lf

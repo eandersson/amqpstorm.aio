@@ -1,0 +1,30 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '0.*'
+      - '1.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Install and verify
+        run: |
+          pip install -e .[dev] build
+          ruff check amqpstorm_aio codegen
+          mypy
+          python -m unittest discover amqpstorm_aio/tests
+      - name: Build wheel and sdist
+        run: python -m build --outdir dist/ .
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
