@@ -87,6 +87,29 @@ class CloseDuringOpenTests(TeardownTestCase):
 class CloseStallTests(TeardownTestCase):
     """A transport dying mid-close must not stall close() until the rpc timeout."""
 
+    async def test_cancelling_during_channel_close_still_closes_the_connection(self):
+        broker = await self.start_broker()
+
+        def withhold_channel_close_ok(session, channel_id, frame):
+            return None
+
+        broker.responders[spec.Channel.Close.index] = withhold_channel_close_ok
+        connection = self.make_connection(broker, timeout=30.0)
+        await connection.open()
+        await connection.channel(rpc_timeout=600)
+
+        closing = asyncio.create_task(connection.close())
+        try:
+            await asyncio.sleep(0.1)
+            self.assertFalse(closing.done(), "the channel close must still be awaiting CloseOk")
+            closing.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await closing
+            self.assertTrue(connection.is_closed)
+            self.assertIsNone(connection._io.transport)
+        finally:
+            connection._terminate(None)
+
     async def test_socket_death_during_close_returns_promptly(self):
         broker = await self.start_broker()
 

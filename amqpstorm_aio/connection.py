@@ -297,15 +297,16 @@ class Connection(base.Stateful):
             self._terminate(exception.AMQPConnectionError("connection was closed during open"))
             LOG.debug("Connection closed")
             return
-        self.set_state(base.Stateful.CLOSING)
-        self._heartbeat.stop()
-        for open_channel in list(self._channels.values()):
-            if not open_channel.is_closed:
-                try:
-                    await open_channel.close()
-                except exception.AMQPError:
-                    pass
         try:
+            self.set_state(base.Stateful.CLOSING)
+            self._heartbeat.stop()
+            for open_channel in list(self._channels.values()):
+                if not open_channel.is_closed:
+                    try:
+                        await open_channel.close()
+                    except exception.AMQPError:
+                        pass
+
             await self._channel0.close(self.parameters["timeout"])
         finally:
             self._io.close()
