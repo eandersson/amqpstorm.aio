@@ -116,10 +116,12 @@ class ContextManagerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_an_unhandled_exception_in_the_block_is_logged_and_still_propagates(self):
         connection = open_connection()
-        with self.assertLogs("amqpstorm_aio.connection", level="WARNING") as captured:
-            with self.assertRaises(RuntimeError):
-                async with connection:
-                    raise RuntimeError("boom")
+        with (
+            self.assertLogs("amqpstorm_aio.connection", level="WARNING") as captured,
+            self.assertRaises(RuntimeError),
+        ):
+            async with connection:
+                raise RuntimeError("boom")
         self.assertTrue(
             any("unhandled exception: boom" in line for line in captured.output),
             captured.output,

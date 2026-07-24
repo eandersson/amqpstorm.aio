@@ -89,7 +89,7 @@ def _encode_table_bytes(out: bytearray, value: bytes) -> None:
 
 
 def _encode_table_decimal(out: bytearray, value: Decimal) -> None:
-    sign_ignored, digits_ignored, exponent = value.as_tuple()
+    _, _, exponent = value.as_tuple()
     if not isinstance(exponent, int):
         raise exception.AMQPInvalidArgument(f"decimal not representable in AMQP: {value}")
     if exponent > 0:

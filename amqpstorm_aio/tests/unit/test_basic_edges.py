@@ -50,7 +50,6 @@ class AnsweringConnection:
 
     async def drain(self):
         self.drain_calls += 1
-        return None
 
     @property
     def methods_written(self):

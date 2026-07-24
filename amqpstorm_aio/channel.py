@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from types import TracebackType
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Self
 from typing import cast
 
 from amqpstorm_aio import base
@@ -112,13 +113,13 @@ class Channel(base.Stateful):
     def __int__(self) -> int:
         return self._channel_id
 
-    async def __aenter__(self) -> Channel:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(
         self,
-        exception_type: type[Exception] | None,
-        exception_value: Exception | None,
+        exception_type: type[BaseException] | None,
+        exception_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
         if exception_value is not None:

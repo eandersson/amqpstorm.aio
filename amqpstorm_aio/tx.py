@@ -1,6 +1,7 @@
 import logging
 from types import TracebackType
 from typing import Any
+from typing import Self
 
 from amqpstorm_aio import base
 from amqpstorm_aio import exception
@@ -18,14 +19,14 @@ class Tx(base.Handler):
         super().__init__(channel)
         self._tx_active = False
 
-    async def __aenter__(self) -> Tx:
+    async def __aenter__(self) -> Self:
         await self.select()
         return self
 
     async def __aexit__(
         self,
-        exception_type: type[Exception] | None,
-        exception_value: Exception | None,
+        exception_type: type[BaseException] | None,
+        exception_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
         if not self._tx_active:

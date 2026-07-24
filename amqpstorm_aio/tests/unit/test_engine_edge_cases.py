@@ -219,9 +219,11 @@ class ChunkedWriteTests(unittest.TestCase):
     def test_a_closing_transport_refuses_an_oversized_write(self):
         io, transport = self._io_with_transport()
         transport.closing = True
-        with unittest.mock.patch.object(io_module, "MAX_SINGLE_WRITE", 4):
-            with self.assertRaises(exception.AMQPConnectionError):
-                io.write(b"abcdefghij")
+        with (
+            unittest.mock.patch.object(io_module, "MAX_SINGLE_WRITE", 4),
+            self.assertRaises(exception.AMQPConnectionError),
+        ):
+            io.write(b"abcdefghij")
         self.assertEqual([], transport.writes)
 
 
@@ -508,7 +510,7 @@ class AbandonedChannelOpenTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(channel.is_closed, "the id stays reserved until CloseOk lands")
 
     async def test_late_close_ok_frees_the_channel(self):
-        connection, channel = await self._abandoned_open_channel()
+        _connection, channel = await self._abandoned_open_channel()
         channel.on_frame(factory.build(spec.Channel.OpenOk))
         channel.on_frame(factory.build(spec.Channel.CloseOk))
         self.assertTrue(channel.is_closed, "after CloseOk the id is reusable")
@@ -1061,7 +1063,7 @@ class ApiValidationLowTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_callable_object_consumer_callback_is_accepted(self):
-        connection, channel = self._open_channel()
+        _connection, channel = self._open_channel()
 
         class AsyncHandler:
             async def __call__(self, message):

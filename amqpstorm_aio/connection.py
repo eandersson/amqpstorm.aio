@@ -4,6 +4,7 @@ import random
 from collections.abc import Sequence
 from types import TracebackType
 from typing import Any
+from typing import Self
 
 from amqpstorm_aio import base
 from amqpstorm_aio import channel as channel_module
@@ -163,15 +164,15 @@ class Connection(base.Stateful):
             heartbeat, self._channel0.send_heartbeat, self._on_heartbeat_dead
         )
 
-    async def __aenter__(self) -> Connection:
+    async def __aenter__(self) -> Self:
         if self.is_closed:
             await self.open()
         return self
 
     async def __aexit__(
         self,
-        exception_type: type[Exception] | None,
-        exception_value: Exception | None,
+        exception_type: type[BaseException] | None,
+        exception_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
         if exception_value is not None:
@@ -454,7 +455,7 @@ class Connection(base.Stateful):
             self._parser.feed(data)
         except exception.AMQPConnectionError as error:
             self._terminate(error)
-        except Exception as error:  # noqa
+        except Exception as error:
             LOG.exception("inbound frame processing failed")
             frame_error = exception.AMQPFrameError(f"failed to decode inbound frame: {error!r}")
             frame_error.__cause__ = error

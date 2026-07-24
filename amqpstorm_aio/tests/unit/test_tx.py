@@ -1,4 +1,5 @@
 import unittest
+from typing import ClassVar
 
 from amqpstorm_aio import exception
 from amqpstorm_aio import spec
@@ -18,7 +19,7 @@ class ReplyWithFields:
 class RecordingChannel:
     """Records every rpc_request and answers with the matching *-Ok method."""
 
-    RESPONSES = {
+    RESPONSES: ClassVar[dict[type[spec.Method], type[spec.Method]]] = {
         spec.Tx.Select: spec.Tx.SelectOk,
         spec.Tx.Commit: spec.Tx.CommitOk,
         spec.Tx.Rollback: spec.Tx.RollbackOk,
@@ -143,10 +144,12 @@ class TxContextManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["Tx.Select", "Tx.Rollback"], self.channel.sent)
 
     async def test_the_body_exception_is_logged_as_a_warning(self):
-        with self.assertLogs("amqpstorm_aio.tx", level="WARNING") as logs:
-            with self.assertRaises(ValueError):
-                async with self.tx:
-                    raise ValueError("body blew up")
+        with (
+            self.assertLogs("amqpstorm_aio.tx", level="WARNING") as logs,
+            self.assertRaises(ValueError),
+        ):
+            async with self.tx:
+                raise ValueError("body blew up")
         self.assertEqual(
             ["WARNING:amqpstorm_aio.tx:Leaving Transaction on exception: body blew up"],
             logs.output,

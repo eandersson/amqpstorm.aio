@@ -37,9 +37,11 @@ class ExceptionHierarchyTests(unittest.TestCase):
             exception.AMQPInvalidArgument,
         ]
         for cls in subclasses:
-            with self.subTest(cls=cls.__name__):
-                with self.assertRaises(exception.AMQPError):
-                    raise cls("boom")
+            with (
+                self.subTest(cls=cls.__name__),
+                self.assertRaises(exception.AMQPError),
+            ):
+                raise cls("boom")
 
     def test_invalid_argument_instance_caught_as_value_error(self):
         with self.assertRaises(ValueError):

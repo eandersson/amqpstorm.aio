@@ -177,7 +177,7 @@ class HeartbeatTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(checker.start())
         for _ in range(_DEATH_THRESHOLD_INTERVALS + 1):
             await asyncio.sleep(0.001)
-            time.sleep(INTERVAL * 2.5)
+            time.sleep(INTERVAL * 2.5)  # noqa
             await asyncio.sleep(0.001)
         self.assertEqual([], deaths, "a starved interval is not evidence of a dead peer")
 

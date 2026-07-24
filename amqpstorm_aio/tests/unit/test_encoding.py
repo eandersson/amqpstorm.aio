@@ -2,6 +2,7 @@ import datetime
 import enum
 import unittest
 from decimal import Decimal
+from typing import ClassVar
 
 from amqpstorm_aio import encoding
 from amqpstorm_aio import exception
@@ -87,7 +88,7 @@ class LongStrTests(unittest.TestCase):
 class IntTagSelectionTests(EncodingTestCase):
     """Integers pick the smallest-fitting signed tag and roundtrip at every boundary."""
 
-    BOUNDARY_TAG_CASES = [
+    BOUNDARY_TAG_CASES: ClassVar[list[tuple[int, bytes]]] = [
         (-128, b"b"),
         (127, b"b"),
         (-129, b"s"),
@@ -145,7 +146,7 @@ class ScalarValueRoundtripTests(EncodingTestCase):
         self.assert_value_roundtrips(Decimal("-1.23"))
 
     def test_integral_decimal_roundtrips(self):
-        self.assert_value_roundtrips(Decimal("5"))
+        self.assert_value_roundtrips(Decimal(5))
 
     def test_decimal_with_positive_exponent_roundtrips_as_its_integral_value(self):
         out = bytearray()
@@ -208,7 +209,7 @@ class ContainerValueRoundtripTests(EncodingTestCase):
 class DecodeTagTests(unittest.TestCase):
     """Every wire tag decodes, including the unsigned/float32 tags the encoder never emits."""
 
-    KNOWN_TAG_CASES = [
+    KNOWN_TAG_CASES: ClassVar[list[tuple[bytes, object]]] = [
         (b"t\x01", True),
         (b"b\xfb", -5),
         (b"B\xfb", 251),

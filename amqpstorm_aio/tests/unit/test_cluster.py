@@ -43,15 +43,19 @@ class HostnameNormalizationTests(unittest.TestCase):
 
     def test_non_string_entries_are_rejected(self):
         for hostname in ([123], ["ok", None], [b"bytes"]):
-            with self.subTest(hostname=hostname):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    build(hostname)
+            with (
+                self.subTest(hostname=hostname),
+                self.assertRaises(exception.AMQPInvalidArgument),
+            ):
+                build(hostname)
 
     def test_non_sequence_hostnames_are_rejected(self):
         for hostname in (123, None, object(), {"host": "a"}):
-            with self.subTest(hostname=hostname):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    build(hostname)
+            with (
+                self.subTest(hostname=hostname),
+                self.assertRaises(exception.AMQPInvalidArgument),
+            ):
+                build(hostname)
 
     def test_bytes_are_rejected_rather_than_iterated(self):
         with self.assertRaises(exception.AMQPInvalidArgument) as context:

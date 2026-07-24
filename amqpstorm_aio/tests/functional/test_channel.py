@@ -77,9 +77,11 @@ class ChannelLifecycleTests(ChannelBrokerTestCase):
     async def test_close_with_non_integer_reply_code_raises_invalid_argument(self):
         channel = await self.connection.channel()
         for bad_reply_code in ("200", None, True):
-            with self.subTest(bad_reply_code=bad_reply_code):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    await channel.close(reply_code=bad_reply_code)
+            with (
+                self.subTest(bad_reply_code=bad_reply_code),
+                self.assertRaises(exception.AMQPInvalidArgument),
+            ):
+                await channel.close(reply_code=bad_reply_code)
         self.assertTrue(channel.is_open, "failed validation must not close the channel")
 
     async def test_close_with_non_string_reply_text_raises_invalid_argument(self):

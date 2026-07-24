@@ -462,9 +462,10 @@ class ChannelArgumentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_close_rejects_out_of_range_reply_code(self):
         for reply_code in (-1, validation.SHORT_MAX + 1):
-            with self.subTest(reply_code=reply_code):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    await self.channel.close(reply_code=reply_code)
+            with self.subTest(reply_code=reply_code), self.assertRaises(
+                exception.AMQPInvalidArgument
+            ):
+                await self.channel.close(reply_code=reply_code)
 
     async def test_close_rejects_bad_reply_text(self):
         with self.assertRaises(exception.AMQPInvalidArgument):
@@ -507,21 +508,24 @@ class ConnectionArgumentTests(unittest.TestCase):
 
     def test_rejects_out_of_range_heartbeat(self):
         for heartbeat in (-1, validation.SHORT_MAX + 1, "60", 1.5):
-            with self.subTest(heartbeat=heartbeat):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    self.build(heartbeat=heartbeat)
+            with self.subTest(heartbeat=heartbeat), self.assertRaises(
+                exception.AMQPInvalidArgument
+            ):
+                self.build(heartbeat=heartbeat)
 
     def test_rejects_non_positive_timeout(self):
         for timeout in (0, -1, -0.5):
-            with self.subTest(timeout=timeout):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    self.build(timeout=timeout)
+            with self.subTest(timeout=timeout), self.assertRaises(
+                exception.AMQPInvalidArgument
+            ):
+                self.build(timeout=timeout)
 
     def test_rejects_non_numeric_timeout(self):
         for timeout in ("10", None, True):
-            with self.subTest(timeout=timeout):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    self.build(timeout=timeout)
+            with self.subTest(timeout=timeout), self.assertRaises(
+                exception.AMQPInvalidArgument
+            ):
+                self.build(timeout=timeout)
 
     def test_rejects_non_dict_option_tables(self):
         for name in ("ssl_options", "client_properties"):
@@ -540,9 +544,10 @@ class ConnectionChannelArgumentTests(unittest.IsolatedAsyncioTestCase):
     async def test_channel_rejects_bad_rpc_timeout(self):
         connection = connection_module.Connection("localhost", "guest", "guest")
         for rpc_timeout in (None, "60", 1.5, True, 0, -1):
-            with self.subTest(rpc_timeout=rpc_timeout):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    await connection.channel(rpc_timeout=rpc_timeout)
+            with self.subTest(rpc_timeout=rpc_timeout), self.assertRaises(
+                exception.AMQPInvalidArgument
+            ):
+                await connection.channel(rpc_timeout=rpc_timeout)
 
 
 class DomainRuleCompilationTests(unittest.TestCase):

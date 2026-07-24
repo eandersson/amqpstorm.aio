@@ -102,9 +102,7 @@ class Heartbeat:
         self._last_check_seconds = now
         if not self._writes_since_check:
             send_heartbeat()
-        if self._reads_since_check:
-            self._threshold = 0
-        elif self.reads_paused:
+        if self._reads_since_check or self.reads_paused:
             self._threshold = 0
         elif elapsed > self._interval_seconds * _STARVED_CHECK_GRACE:
             LOG.debug(

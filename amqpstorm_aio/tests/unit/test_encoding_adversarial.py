@@ -248,9 +248,9 @@ class PositiveExponentDecimalTests(unittest.TestCase):
 
     def test_normalized_hundred_equals_plain_hundred_on_the_wire(self):
         plain = bytearray()
-        encoding.encode_table_value(plain, Decimal("100"))
+        encoding.encode_table_value(plain, Decimal(100))
         normalized = bytearray()
-        encoding.encode_table_value(normalized, Decimal("100").normalize())
+        encoding.encode_table_value(normalized, Decimal(100).normalize())
         self.assertEqual(bytes(plain), bytes(normalized))
 
     def test_positive_exponent_beyond_int32_still_raises(self):
@@ -267,7 +267,7 @@ class EncoderRangeGapTests(unittest.TestCase):
 
     def test_decimal_unscaled_beyond_32_bit_raises_invalid_argument(self):
         with self.assertRaises(exception.AMQPInvalidArgument):
-            encoding.encode_table_value(bytearray(), Decimal("9999999999"))
+            encoding.encode_table_value(bytearray(), Decimal(9999999999))
 
     def test_pre_epoch_datetime_raises_invalid_argument(self):
         value = datetime.datetime(1960, 1, 1, tzinfo=datetime.UTC)

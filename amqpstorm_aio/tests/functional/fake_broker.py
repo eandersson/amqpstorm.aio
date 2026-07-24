@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from typing import Any
+from typing import Self
 from typing import cast
 
 from amqpstorm_aio import framing
@@ -205,7 +206,7 @@ class FakeBroker:
         self.port = 0
         self._server: asyncio.Server | None = None
 
-    async def __aenter__(self) -> FakeBroker:
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 

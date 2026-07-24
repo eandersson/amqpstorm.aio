@@ -1,6 +1,6 @@
 import keyword
 import pathlib
-import xml.etree.ElementTree as ElementTree
+from xml.etree import ElementTree
 
 SPEC_XML = pathlib.Path(__file__).parent / "amqp0-9-1.extended.xml"
 OUTPUT_PATH = pathlib.Path(__file__).parent.parent / "amqpstorm_aio" / "spec.py"

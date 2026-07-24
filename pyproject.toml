@@ -32,7 +32,7 @@ classifiers = [
 [project.optional-dependencies]
 # amqpstorm supplies the RabbitMQ management API client the end-to-end tier uses to
 # verify broker-side state; it is never imported by the library itself.
-dev = ["coverage>=7", "ruff", "mypy", "amqpstorm[management]>=3.1"]
+dev = ["coverage>=7", "ruff>=0.16.0", "mypy", "amqpstorm[management]>=3.1"]
 
 [project.urls]
 Repository = "https://github.com/eandersson/amqpstorm-aio"

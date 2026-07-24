@@ -11,8 +11,9 @@ logging.basicConfig(level=logging.INFO)
 
 LOG = logging.getLogger(__name__)
 
+
 async def on_message(message: amqpstorm_aio.Message) -> None:
-    LOG.info("Message:", message.text)
+    LOG.info("Message: %s", message.text)
 
     await message.ack()
 

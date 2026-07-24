@@ -137,8 +137,8 @@ class IO:
     __slots__ = (
         "__weakref__",
         "drain_waiters",
-        "on_data",
         "on_connection_lost",
+        "on_data",
         "transport",
         "write_paused",
     )

@@ -178,9 +178,11 @@ class ParseUriTests(unittest.TestCase):
 
     def test_non_string_uri_raises_invalid_argument(self):
         for bad_uri in (None, 5672, b"amqp://localhost", ["amqp://localhost"]):
-            with self.subTest(bad_uri=bad_uri):
-                with self.assertRaises(exception.AMQPInvalidArgument):
-                    uri_connection.parse_uri(bad_uri)
+            with (
+                self.subTest(bad_uri=bad_uri),
+                self.assertRaises(exception.AMQPInvalidArgument),
+            ):
+                uri_connection.parse_uri(bad_uri)
 
     def test_garbage_heartbeat_raises_value_error(self):
         with self.assertRaises(ValueError):
