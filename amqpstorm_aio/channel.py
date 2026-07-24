@@ -426,9 +426,7 @@ class Channel(base.Stateful):
 
     def on_connection_terminated(self, error: exception.AMQPConnectionError) -> None:
         """Fail every pending waiter after the connection died underneath us."""
-        self.set_state(base.Stateful.CLOSED)
-        self._fail_waiters(error)
-        self._wake_inbound()
+        self._close_locally(error)
 
     def _on_method(self, method: spec.Method) -> None:
         if method.has_content:
@@ -728,6 +726,10 @@ class Channel(base.Stateful):
     def _drop_inbound_buffer(self) -> None:
         """Discard buffered and half-assembled inbound bytes, releasing their backlog."""
         self._inbound.clear()
+        self._content_method = None
+        self._content_header = None
+        self._content_body.clear()
+        self._content_received = 0
         released = self._buffered_inbound_bytes
         self._buffered_inbound_bytes = 0
         if released:
@@ -741,12 +743,12 @@ class Channel(base.Stateful):
     def _user_initiated_close(self) -> bool:
         return self._user_closed or self._connection.user_closed
 
-    def _close_locally(self) -> None:
+    def _close_locally(self, error: exception.AMQPError | None = None) -> None:
         self._consumer_tags.clear()
         self._consumer_callbacks.clear()
         self._drop_inbound_buffer()
         self._stale_rpc_expected.clear()
         self._stale_gets.clear()
         self.set_state(base.Stateful.CLOSED)
-        self._fail_waiters(exception.AMQPChannelError("channel closed"))
+        self._fail_waiters(error or exception.AMQPChannelError("channel closed"))
         self._wake_inbound()

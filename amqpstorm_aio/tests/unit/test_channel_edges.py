@@ -310,6 +310,27 @@ class InboundGeneratorTests(ChannelTestCase):
         channel.on_connection_terminated(exception.AMQPConnectionError("connection closed"))
         self.assertEqual([], await buffered_messages(channel))
 
+    async def test_connection_loss_discards_buffered_messages_before_raising(self):
+        channel, connection = self.make_channel()
+        deliver(channel, b"queued")
+
+        connection_error = exception.AMQPConnectionError("socket closed")
+
+        def raise_connection_error():
+            raise connection_error
+
+        connection.check_for_errors = raise_connection_error
+        channel.on_connection_terminated(connection_error)
+
+        self.assertEqual(
+            [6],
+            connection.drained,
+            "connection loss must release bytes for deliveries the application cannot ack",
+        )
+        self.assertEqual(0, channel._buffered_inbound_bytes)
+        with self.assertRaisesRegex(exception.AMQPConnectionError, "socket closed"):
+            await anext(channel.build_inbound_messages())
+
     async def test_yielding_a_message_releases_its_bytes_from_the_connection_backlog(self):
         channel, connection = self.make_channel()
         deliver(channel, b"hello")
