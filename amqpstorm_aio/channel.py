@@ -60,12 +60,17 @@ class Channel(base.Stateful):
         "_next_delivery_tag",
         "_queue",
         "_recorded_errors",
+        "_return_confirm_tag",
+        "_return_error",
+        "_return_lock",
+        "_return_pending",
         "_returned_errors",
         "_returns_recorded",
         "_rpc_expected",
         "_rpc_lock",
         "_rpc_timeout",
         "_rpc_waiter",
+        "_session_token",
         "_stale_gets",
         "_stale_rpc_expected",
         "_tx",
@@ -75,6 +80,7 @@ class Channel(base.Stateful):
     def __init__(self, channel_id: int, connection: Connection, rpc_timeout: int) -> None:
         super().__init__()
         self._channel_id = channel_id
+        self._session_token = object()
         self._connection = connection
         self._rpc_timeout = rpc_timeout
         self._rpc_lock = asyncio.Lock()
@@ -93,6 +99,10 @@ class Channel(base.Stateful):
         self._flow_gate: asyncio.Future[None] | None = None
         self._next_delivery_tag = 0
         self._confirm_futures: dict[int, asyncio.Future[bool]] = {}
+        self._return_confirm_tag: int | None = None
+        self._return_error: exception.AMQPMessageError | None = None
+        self._return_lock = asyncio.Lock()
+        self._return_pending: asyncio.Future[None] | None = None
         self._returned_errors: deque[exception.AMQPMessageError] = deque(
             maxlen=_MAX_RECORDED_ERRORS
         )
@@ -157,6 +167,11 @@ class Channel(base.Stateful):
         return self._channel_id
 
     @property
+    def session_token(self) -> object:
+        """Identity of this channel's current delivery-tag namespace."""
+        return self._session_token
+
+    @property
     def rpc_lock(self) -> asyncio.Lock:
         return self._rpc_lock
 
@@ -179,6 +194,8 @@ class Channel(base.Stateful):
     async def open(self) -> None:
         """Send Channel.Open and wait for OpenOk; reusable while its id is unclaimed."""
         self._connection.reclaim_channel_id(self)
+        self._session_token = object()
+        self._release_return_slot()
         self._drop_inbound_buffer()
         self._recorded_errors.clear()
         self._returned_errors.clear()
@@ -599,6 +616,11 @@ class Channel(base.Stateful):
         )
         LOG.warning(str(returned_error))
         self._returns_recorded += 1
+        if self._return_confirm_tag is not None:
+            # Basic.Return has no delivery tag. Only one return-capable confirmed
+            # publish is in flight, so the error belongs exclusively to its waiter.
+            self._return_error = returned_error
+            return
         self._returned_errors.append(returned_error)
         self._recorded_errors.append(returned_error)
 
@@ -638,18 +660,46 @@ class Channel(base.Stateful):
         self._next_delivery_tag += 1
         return self._next_delivery_tag
 
-    def register_confirm(self, delivery_tag: int) -> asyncio.Future[bool]:
+    def register_confirm(
+        self, delivery_tag: int, *, may_return: bool = False
+    ) -> asyncio.Future[bool]:
         waiter: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
         self._confirm_futures[delivery_tag] = waiter
+        if may_return:
+            self._return_confirm_tag = delivery_tag
+            self._return_error = None
+            self._return_pending = asyncio.get_running_loop().create_future()
         return waiter
 
     @property
+    def return_lock(self) -> asyncio.Lock:
+        """Serialize return-capable callers without waking the entire publish queue."""
+        return self._return_lock
+
+    @property
+    def return_pending(self) -> asyncio.Future[None] | None:
+        """Wire-level completion of the outstanding return-capable publish.
+
+        This survives caller cancellation/timeout: a late Return must never be
+        assigned to a later publish. Only a broker confirm or teardown releases it.
+        """
+        return self._return_pending
+
+    def _release_return_slot(self) -> None:
+        pending = self._return_pending
+        self._return_pending = None
+        self._return_confirm_tag = None
+        self._return_error = None
+        if pending is not None and not pending.done():
+            pending.set_result(None)
+
+    @property
     def returns_recorded(self) -> int:
-        """Monotonic count of Basic.Returns seen; lets publishes claim only fresh ones."""
+        """Monotonic count of Basic.Returns seen, including publish-owned returns."""
         return self._returns_recorded
 
     def pop_returned_error(self) -> exception.AMQPMessageError | None:
-        """Claim the oldest pending Basic.Return error (mandatory-publish path)."""
+        """Claim the oldest Basic.Return not owned by a confirmed publish."""
         if not self._returned_errors:
             return None
         returned_error = self._returned_errors.popleft()
@@ -674,11 +724,25 @@ class Channel(base.Stateful):
         """Record an abandoned Basic.Get whose answer is still on its way."""
         self._stale_gets.append(no_ack)
 
-    def discard_confirm(self, delivery_tag: int) -> None:
-        """Withdraw a registered confirm whose publish never made it onto the wire."""
+    def discard_confirm(self, delivery_tag: int, *, written: bool = False) -> None:
+        """Withdraw a waiter, retaining return ownership if its publish was written."""
         waiter = self._confirm_futures.pop(delivery_tag, None)
         if waiter is not None and not waiter.done():
             waiter.cancel()
+        if not written and delivery_tag == self._return_confirm_tag:
+            self._release_return_slot()
+
+    def _resolve_confirm(self, delivery_tag: int, *, result: bool) -> None:
+        returned_error = None
+        if delivery_tag == self._return_confirm_tag:
+            returned_error = self._return_error
+            self._release_return_slot()
+        waiter = self._confirm_futures.pop(delivery_tag, None)
+        if waiter is not None and not waiter.done():
+            if returned_error is not None:
+                waiter.set_exception(returned_error)
+            else:
+                waiter.set_result(result)
 
     def _resolve_confirms(self, delivery_tag: int, multiple: bool, *, result: bool) -> None:
         if multiple:
@@ -691,13 +755,13 @@ class Channel(base.Stateful):
                         break
                     resolved.append(tag)
             for tag in resolved:
-                waiter = self._confirm_futures.pop(tag)
-                if not waiter.done():
-                    waiter.set_result(result)
+                self._resolve_confirm(tag, result=result)
+            # An abandoned caller has no waiter, but still owns its late Return.
+            return_tag = self._return_confirm_tag
+            if return_tag is not None and (delivery_tag == 0 or return_tag <= delivery_tag):
+                self._resolve_confirm(return_tag, result=result)
             return
-        single_waiter = self._confirm_futures.pop(delivery_tag, None)
-        if single_waiter is not None and not single_waiter.done():
-            single_waiter.set_result(result)
+        self._resolve_confirm(delivery_tag, result=result)
 
     def _fail_waiters(self, error: exception.AMQPError) -> None:
         for waiter in (self._rpc_waiter, self._get_waiter):
@@ -707,6 +771,7 @@ class Channel(base.Stateful):
             if not confirm_waiter.done():
                 confirm_waiter.set_exception(error)
         self._confirm_futures.clear()
+        self._release_return_slot()
         self._release_flow_gate()
 
     async def _wait_for_inbound(self, timeout: float | None) -> bool:

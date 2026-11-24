@@ -12,9 +12,13 @@ type DeliveryMethod = spec.Basic.Deliver | spec.Basic.GetOk
 
 
 class Message:
-    """One delivered AMQP message."""
+    """One delivered AMQP message, bound to the channel session that received it.
 
-    __slots__ = ("body", "channel", "method", "properties")
+    Acknowledgement methods reject messages from an earlier session after the
+    channel is reopened, even when the broker has reused their delivery tags.
+    """
+
+    __slots__ = ("_session_token", "body", "channel", "method", "properties")
 
     def __init__(
         self,
@@ -24,6 +28,7 @@ class Message:
         properties: spec.Basic.Properties,
     ) -> None:
         self.channel = channel
+        self._session_token = channel.session_token
         self.body = body
         self.method = method
         self.properties = properties
@@ -75,12 +80,19 @@ class Message:
 
     async def ack(self) -> None:
         """Acknowledge this delivery."""
+        self._check_session()
         await self.channel.basic.ack(delivery_tag=self.method.delivery_tag)
 
     async def nack(self, requeue: bool = True) -> None:
         """Negatively acknowledge this delivery."""
+        self._check_session()
         await self.channel.basic.nack(delivery_tag=self.method.delivery_tag, requeue=requeue)
 
     async def reject(self, requeue: bool = True) -> None:
         """Reject this delivery."""
+        self._check_session()
         await self.channel.basic.reject(delivery_tag=self.method.delivery_tag, requeue=requeue)
+
+    def _check_session(self) -> None:
+        if self._session_token is not self.channel.session_token:
+            raise exception.AMQPChannelError("message belongs to a different channel session")

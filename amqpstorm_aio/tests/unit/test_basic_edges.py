@@ -264,7 +264,9 @@ class MandatoryReturnClaimTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.001)
 
         self._record_return(channel)
-        channel._resolve_confirms(2, True, result=True)
+        channel._resolve_confirms(1, False, result=True)
+        await asyncio.sleep(0.001)
+        channel._resolve_confirms(2, False, result=True)
         results = await asyncio.wait_for(
             asyncio.gather(first, second, return_exceptions=True), 1
         )

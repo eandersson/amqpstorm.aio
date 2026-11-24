@@ -24,6 +24,7 @@ class FakeBasic:
 class FakeChannel:
     def __init__(self):
         self.basic = FakeBasic()
+        self.session_token = object()
 
 
 def make_deliver_message(channel=None, body=b"payload", **properties):
@@ -34,7 +35,9 @@ def make_deliver_message(channel=None, body=b"payload", **properties):
         exchange="events",
         routing_key="orders.created",
     )
-    return message.Message(channel, body, method, spec.Basic.Properties(**properties))
+    return message.Message(
+        channel or FakeChannel(), body, method, spec.Basic.Properties(**properties)
+    )
 
 
 def make_get_message(body=b"payload"):
@@ -45,7 +48,7 @@ def make_get_message(body=b"payload"):
         routing_key="orders.created",
         message_count=3,
     )
-    return message.Message(None, body, method, spec.Basic.Properties())
+    return message.Message(FakeChannel(), body, method, spec.Basic.Properties())
 
 
 class ConstructionTests(unittest.TestCase):

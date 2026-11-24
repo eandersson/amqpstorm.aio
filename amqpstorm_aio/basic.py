@@ -278,6 +278,7 @@ class Basic(base.Handler):
         validation.require_boolean("immediate", immediate)
         body, properties = self._prepare_content(body, properties)
         channel = self._channel
+        session_token = channel.session_token
         connection = channel.connection
         connection.ensure_current_loop()
         channel.check_for_errors()
@@ -291,18 +292,41 @@ class Basic(base.Handler):
             properties=properties,
             max_frame_size=connection.max_frame_size,
         )
+        may_return = mandatory or immediate
+        if may_return:
+            async with channel.return_lock:
+                return await self._publish_frames(frames, session_token, may_return=True)
+        return await self._publish_frames(frames, session_token, may_return=False)
+
+    async def _publish_frames(
+        self, frames: bytearray, session_token: object, *, may_return: bool
+    ) -> bool | None:
+        channel = self._channel
+        connection = channel.connection
         await connection.drain()
-        while (select_in_flight := channel.confirm_select_pending) is not None:
-            await select_in_flight
-        while (flow_stopped := channel.flow_gate) is not None:
-            await flow_stopped
+        while True:
+            while (select_in_flight := channel.confirm_select_pending) is not None:
+                await select_in_flight
+            while (flow_stopped := channel.flow_gate) is not None:
+                await flow_stopped
+            pending_return = channel.return_pending if may_return else None
+            if pending_return is None:
+                break
+            try:
+                async with asyncio.timeout(channel.rpc_timeout):
+                    await asyncio.shield(pending_return)
+            except TimeoutError:
+                raise exception.AMQPChannelError(
+                    "previous return-capable publish confirm took too long"
+                ) from None
+        if session_token is not channel.session_token:
+            raise exception.AMQPChannelError("channel session changed while publish was waiting")
         channel.check_for_errors()
         if not channel.confirming_deliveries:
             connection.write_bytes(frames)
             return None
         delivery_tag = channel.allocate_delivery_tag()
-        confirm_waiter = channel.register_confirm(delivery_tag)
-        returns_before = channel.returns_recorded
+        confirm_waiter = channel.register_confirm(delivery_tag, may_return=may_return)
         try:
             connection.write_bytes(frames)
         except BaseException:
@@ -316,14 +340,8 @@ class Basic(base.Handler):
             confirmed = await confirm_waiter
         finally:
             deadline.cancel()
-            # A timed-out or cancelled wait leaves its tag registered; only an ack the
-            # broker may never send would clear it.
-            if not confirm_waiter.done():
-                channel.discard_confirm(delivery_tag)
-        if mandatory and channel.returns_recorded > returns_before:
-            returned_error = channel.pop_returned_error()
-            if returned_error is not None:
-                raise returned_error
+            if session_token is channel.session_token:
+                channel.discard_confirm(delivery_tag, written=True)
         return confirmed
 
     @staticmethod

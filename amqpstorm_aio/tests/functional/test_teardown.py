@@ -227,6 +227,7 @@ class DroppedConnectionReapTests(TeardownTestCase):
         with self.assertWarns(ResourceWarning):
             del connection
             gc.collect()
+        gc.collect()
         self.assertIsNone(finalizer(), "nothing may pin a dropped connection")
 
     async def test_a_properly_closed_connection_releases_its_transport(self):

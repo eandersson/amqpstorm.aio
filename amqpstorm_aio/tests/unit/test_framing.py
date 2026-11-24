@@ -1,4 +1,5 @@
 import datetime
+import random
 import struct
 import unittest
 
@@ -16,6 +17,50 @@ def _make_parser(max_frame_size=_LARGE_FRAME_MAX):
         lambda channel_id, value: received.append((channel_id, value)), max_frame_size
     )
     return parser, received
+
+
+def _mixed_frame_stream():
+    """One of every frame type, back to back, as a broker would send them."""
+    stream = bytearray()
+    framing.append_method_frame(
+        stream,
+        1,
+        factory.build(spec.Basic.Deliver, consumer_tag="ctag", delivery_tag=7, routing_key="rk"),
+    )
+    framing.append_content_header_frame(
+        stream, 1, 11, spec.Basic.Properties(content_type="text/plain", delivery_mode=2)
+    )
+    framing.append_frame(stream, spec.FRAME_BODY, 1, b"hello ")
+    framing.append_frame(stream, spec.FRAME_BODY, 1, b"world")
+    stream += framing.HEARTBEAT_FRAME
+    framing.append_method_frame(
+        stream, 2, factory.build(spec.Basic.Qos, prefetch_size=0, prefetch_count=5, global_=False)
+    )
+    return bytes(stream)
+
+
+def _comparable(dispatched):
+    """Dispatched frames as plain values, so two feeds can be compared for equality."""
+    result = []
+    for channel_id, value in dispatched:
+        if isinstance(value, bytes):
+            result.append((channel_id, "body", value))
+        elif isinstance(value, framing.Heartbeat):
+            result.append((channel_id, "heartbeat"))
+        elif isinstance(value, framing.ContentHeader):
+            encoded = bytearray()
+            value.properties.encode(encoded)
+            result.append((channel_id, "header", value.body_size, bytes(encoded)))
+        else:
+            result.append((channel_id, "method", type(value).__name__, bytes(value.encode())))
+    return result
+
+
+def _feed_in_chunks(stream, chunks):
+    parser, received = _make_parser()
+    for chunk in chunks:
+        parser.feed(chunk)
+    return _comparable(received)
 
 
 class ModuleConstantsTests(unittest.TestCase):
@@ -118,6 +163,51 @@ class FrameParserDispatchTests(unittest.TestCase):
             if index < len(out) - 1:
                 self.assertEqual(received, [], f"dispatched early after byte {index}")
         self.assertEqual(received, [(2, b"drip")])
+
+    def test_every_split_point_dispatches_the_same_frames(self):
+        """A lossy link delivers the same bytes in arbitrary pieces.
+
+        TCP repairs loss and reordering, so the parser always sees a correct byte
+        stream -- but segmented wherever retransmission happened to land. Where the
+        boundary falls must never change what comes out.
+        """
+        stream = _mixed_frame_stream()
+        expected = _feed_in_chunks(stream, [stream])
+        self.assertEqual(6, len(expected), "fixture should cover every frame type")
+        for split in range(len(stream) + 1):
+            with self.subTest(split=split):
+                self.assertEqual(
+                    expected, _feed_in_chunks(stream, [stream[:split], stream[split:]])
+                )
+
+    def test_a_byte_at_a_time_dispatches_the_same_frames(self):
+        stream = _mixed_frame_stream()
+        expected = _feed_in_chunks(stream, [stream])
+        drip = [stream[index : index + 1] for index in range(len(stream))]
+        self.assertEqual(expected, _feed_in_chunks(stream, drip))
+
+    def test_random_segmentation_dispatches_the_same_frames(self):
+        stream = _mixed_frame_stream()
+        expected = _feed_in_chunks(stream, [stream])
+        for seed in range(50):
+            rng = random.Random(seed)
+            chunks = []
+            offset = 0
+            while offset < len(stream):
+                size = rng.randint(1, 17)
+                chunks.append(stream[offset : offset + size])
+                offset += size
+            with self.subTest(seed=seed):
+                self.assertEqual(expected, _feed_in_chunks(stream, chunks))
+
+    def test_an_empty_feed_between_fragments_changes_nothing(self):
+        stream = _mixed_frame_stream()
+        expected = _feed_in_chunks(stream, [stream])
+        midpoint = len(stream) // 2
+        self.assertEqual(
+            expected,
+            _feed_in_chunks(stream, [b"", stream[:midpoint], b"", stream[midpoint:], b""]),
+        )
 
     def test_partial_trailing_frame_stays_buffered_until_completed(self):
         out = bytearray()
